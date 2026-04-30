@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRM задачи - Авто-создание деталей из запроса</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+        background: #0f1a24;
+        color: white;
+      }
+
+      .controls {
+        text-align: center;
+        padding: 20px;
+        background: #0a121a;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+      }
+      input,
+      select,
+      button,
+      textarea {
+        padding: 10px 15px;
+        margin: 0;
+        border-radius: 8px;
+        border: none;
+        font-size: 14px;
+      }
+      input,
+      select,
+      textarea {
+        background: #1a2a3a;
+        color: white;
+        border: 1px solid #2a4a6a;
+      }
+      button {
+        background: #2a6a4a;
+        color: white;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-weight: bold;
+      }
+      button:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.1);
+      }
+      button.danger {
+        background: #8b2c2c;
+      }
+      button.danger:hover {
+        background: #a33;
+      }
+      button.auto-btn {
+        background: #9c27b0;
+      }
+      button.auto-btn:hover {
+        background: #7b1fa2;
+      }
+
+      .settings-btn {
+        background: #2a4a6a;
+        font-size: 18px;
+        padding: 8px 15px;
+        position: relative;
+      }
+      .settings-dropdown {
+        position: absolute;
+        top: 55px;
+        right: 20px;
+        background: #1a2a3a;
+        border-radius: 12px;
+        padding: 10px;
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 200;
+        min-width: 220px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        border: 1px solid #2a4a6a;
+      }
+      .settings-dropdown button {
+        width: 100%;
+        background: #2d3e4e;
+        text-align: left;
+        padding: 10px 15px;
+      }
+      .settings-dropdown button:hover {
+        background: #ff9800;
+        color: #0f1a24;
+      }
+
+      .workspace {
+        display: flex;
+        gap: 20px;
+        padding: 20px;
+        min-height: calc(100vh - 80px);
+      }
+
+      .balls {
+        flex: 2;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        align-content: flex-start;
+      }
+      .ball {
+        width: 160px;
+        height: 160px;
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 12px;
+        cursor: grab;
+        font-weight: bold;
+        transition: all 0.2s;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+      .ball:active {
+        cursor: grabbing;
+      }
+      .ball.dragging {
+        opacity: 0.4;
+        transform: scale(0.95);
+      }
+      .ball.high {
+        background: linear-gradient(135deg, #e53935, #c62828);
+        color: white;
+      }
+      .ball.medium {
+        background: linear-gradient(135deg, #fb8c00, #ef6c00);
+        color: white;
+      }
+      .ball.low {
+        background: linear-gradient(135deg, #43a047, #2e7d32);
+        color: white;
+      }
+
+      .time-label {
+        font-size: 10px;
+        margin-bottom: 8px;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 2px 6px;
+        border-radius: 12px;
+      }
+      .client-name {
+        font-size: 13px;
+        font-weight: bold;
+        margin: 3px 0;
+      }
+      .car-brand {
+        font-size: 11px;
+        background: rgba(0, 0, 0, 0.4);
+        padding: 2px 6px;
+        border-radius: 12px;
+        margin: 3px 0;
+      }
+      .ball-task-text {
+        font-size: 10px;
+        overflow: hidden;
+        max-height: 40px;
+      }
+
+      .baskets {
+        width: 420px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
+        padding-right: 5px;
+      }
+      .baskets::-webkit-scrollbar {
+        width: 8px;
+      }
+      .baskets::-webkit-scrollbar-track {
+        background: #1a2a3a;
+        border-radius: 4px;
+      }
+      .baskets::-webkit-scrollbar-thumb {
+        background: #ff9800;
+        border-radius: 4px;
+      }
+      .basket {
+        background: #1a2a3a;
+        padding: 12px;
+        border-radius: 12px;
+        flex-shrink: 0;
+      }
+      .basket-header {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #ff9800;
+        display: flex;
+        justify-content: space-between;
+      }
+      .basket-count {
+        background: #ff9800;
+        color: #0f1a24;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 12px;
+      }
+
+      .date-header {
+        margin-top: 12px;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #ff9800;
+        font-size: 14px;
+        border-left: 3px solid #ff9800;
+        padding-left: 8px;
+      }
+      .task {
+        background: #2d3e4e;
+        padding: 12px;
+        border-radius: 10px;
+        margin: 8px 0;
+        cursor: pointer;
+        transition: all 0.2s;
+        line-height: 1.4;
+      }
+      .task:hover {
+        background: #3d5a6e;
+        transform: translateX(3px);
+      }
+      .task-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #4a6a7a;
+      }
+      .task-time-start {
+        color: #ff9800;
+        font-size: 12px;
+        font-weight: bold;
+      }
+      .task-duration {
+        color: #4caf50;
+        font-size: 12px;
+        font-weight: bold;
+      }
+      .task-info-row {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+      .task-client {
+        font-size: 15px;
+        font-weight: bold;
+        color: #fff;
+        flex-shrink: 0;
+      }
+      .task-car {
+        font-size: 12px;
+        color: #ff9800;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 2px 8px;
+        border-radius: 16px;
+        flex-shrink: 0;
+      }
+      .task-text {
+        font-size: 13px;
+        color: #ddd;
+        word-break: break-word;
+        flex: 1;
+      }
+      .task-comment {
+        font-size: 12px;
+        color: #aaa;
+        margin-top: 8px;
+        padding-top: 6px;
+        border-top: 1px solid #4a6a7a;
+        font-style: italic;
+      }
+      .restore-btn {
+        margin-top: 8px;
+        background: #ff9800;
+        color: #0f1a24;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: bold;
+      }
+      .restore-btn:hover {
+        background: #ff5722;
+      }
+
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.9);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+      }
+      .modal-content {
+        background: #2d3e4e;
+        padding: 25px;
+        border-radius: 16px;
+        width: 900px;
+        max-width: 95%;
+        max-height: 85vh;
+        overflow: auto;
+        animation: slideIn 0.3s;
+      }
+      .modal-large {
+        width: 800px;
+        max-width: 95%;
+      }
+      .modal-xxl {
+        width: 1000px;
+        max-width: 95%;
+      }
+      .modal-sm {
+        width: 450px;
+        max-width: 90%;
+      }
+      .modal-md {
+        width: 600px;
+        max-width: 95%;
+      }
+      @keyframes slideIn {
+        from {
+          transform: translateY(-30px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .close-btn {
+        background: none;
+        font-size: 24px;
+        padding: 0;
+        color: #ff9800;
+        cursor: pointer;
+        border: none;
+        font-weight: bold;
+      }
+      .close-btn:hover {
+        color: #ff5722;
+      }
+      .search-input {
+        width: 100%;
+        margin-bottom: 15px;
+      }
+      .archive-list {
+        max-height: 500px;
+        overflow-y: auto;
+      }
+      .archive-item {
+        background: #1a2a3a;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .archive-item:hover {
+        background: #2a4a6a;
+        transform: translateX(3px);
+      }
+      .archive-date {
+        color: #ff9800;
+        font-size: 11px;
+      }
+      
+      .part-card {
+        background: #1a2a3a;
+        margin: 12px 0;
+        border-radius: 12px;
+        overflow: hidden;
+        border-left: 3px solid #ff9800;
+      }
+      .part-header {
+        background: #0f1a24;
+        padding: 10px 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .part-header:hover {
+        background: #1a2a3a;
+      }
+      .part-title {
+        font-size: 14px;
+      }
+      .part-original {
+        font-family: monospace;
+        color: #ff9800;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .part-original:hover {
+        text-decoration: underline;
+        opacity: 0.8;
+      }
+      .delete-part {
+        color: #ff5722;
+        cursor: pointer;
+        font-size: 18px;
+        padding: 0 5px;
+      }
+      .delete-part:hover {
+        color: #ff0000;
+      }
+      .analogs-list {
+        padding: 10px 12px;
+        border-top: 1px solid #2a4a6a;
+      }
+      
+      .analog-item {
+        background: #2d3e4e;
+        margin: 6px 0;
+        padding: 8px 12px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: nowrap;
+      }
+      .analog-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        flex: 1;
+        cursor: pointer;
+      }
+      .analog-info:hover {
+        opacity: 0.8;
+      }
+      .analog-brand {
+        font-weight: bold;
+        color: #4caf50;
+        background: rgba(0,0,0,0.3);
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .analog-number {
+        font-family: monospace;
+        color: #ddd;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .analog-supplier {
+        background: #2196f3;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .analog-price {
+        background: #ff9800;
+        color: #0f1a24;
+        font-weight: bold;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .analog-delivery {
+        background: #9c27b0;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .delete-analog {
+        color: #ff5722;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 0 5px;
+        flex-shrink: 0;
+      }
+      .delete-analog:hover {
+        color: #ff0000;
+      }
+      .edit-analog {
+        color: #2196f3;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 0 5px;
+        flex-shrink: 0;
+      }
+      .edit-analog:hover {
+        color: #64b5f6;
+      }
+      
+      .add-analog-form {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
+      .add-analog-form input, .add-analog-form select {
+        flex: 1;
+        min-width: 100px;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+      .add-analog-form button {
+        padding: 6px 12px;
+        font-size: 12px;
+      }
+      
+      .manager-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        margin-left: 10px;
+      }
+      .manager-eduard {
+        background: #2196f3;
+        color: white;
+      }
+      .manager-gennady {
+        background: #4caf50;
+        color: white;
+      }
+      .manager-vyacheslav {
+        background: #9c27b0;
+        color: white;
+      }
+
+      .client-item {
+        background: #1a2a3a;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .client-item:hover {
+        background: #2a4a6a;
+        transform: translateX(3px);
+      }
+      .client-phone {
+        color: #ff9800;
+        font-size: 12px;
+      }
+      .client-car {
+        font-size: 11px;
+        color: #4caf50;
+      }
+      
+      .supplier-item {
+        background: #1a2a3a;
+        padding: 10px 12px;
+        margin: 6px 0;
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .supplier-item span {
+        cursor: pointer;
+        flex: 1;
+      }
+      .supplier-item:hover {
+        background: #2a4a6a;
+      }
+      
+      .dict-item {
+        background: #1a2a3a;
+        padding: 10px 12px;
+        margin: 6px 0;
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .dict-item span {
+        cursor: pointer;
+        flex: 1;
+      }
+      .dict-item:hover {
+        background: #2a4a6a;
+      }
+      .dict-abbr {
+        font-family: monospace;
+        color: #ff9800;
+        font-weight: bold;
+      }
+      .dict-full {
+        color: #4caf50;
+      }
+
+      .followup-block {
+        background: #1a2a3a;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-left: 4px solid #ff9800;
+      }
+      .followup-title {
+        font-size: 16px;
+        font-weight: bold;
+        color: #ff9800;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .followup-task {
+        background: #2d3e4e;
+        padding: 10px;
+        margin: 8px 0;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .followup-task:hover {
+        background: #3d5a6e;
+        transform: translateX(3px);
+      }
+      .followup-task.urgent {
+        border-left: 3px solid #f44336;
+      }
+      .followup-contact-btn {
+        background: #ff9800;
+        color: #0f1a24;
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: bold;
+        margin-top: 8px;
+        cursor: pointer;
+        border: none;
+        width: 100%;
+      }
+      .followup-contact-btn:hover {
+        background: #ff5722;
+      }
+
+      .toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #333;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        z-index: 2000;
+        animation: fadeInOut 2.5s ease;
+        font-size: 14px;
+      }
+      @keyframes fadeInOut {
+        0% {
+          opacity: 0;
+          bottom: 0;
+        }
+        15% {
+          opacity: 1;
+          bottom: 20px;
+        }
+        85% {
+          opacity: 1;
+          bottom: 20px;
+        }
+        100% {
+          opacity: 0;
+          bottom: 0;
+        }
+      }
+      .loading {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        padding: 20px;
+        border-radius: 12px;
+        z-index: 2000;
+      }
+      .stats {
+        position: fixed;
+        bottom: 10px;
+        left: 15px;
+        font-size: 12px;
+        color: #ff9800;
+        opacity: 0.7;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 5px 10px;
+        border-radius: 20px;
+      }
+      .signature {
+        position: fixed;
+        bottom: 10px;
+        right: 15px;
+        font-size: 11px;
+        color: #ff9800;
+        opacity: 0.6;
+      }
+      .file-upload {
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+        width: 100%;
+      }
+      
+      .parts-hint {
+        position: fixed;
+        bottom: 50px;
+        right: 15px;
+        background: #ff9800;
+        color: #0f1a24;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: bold;
+        opacity: 0;
+        transition: opacity 0.3s;
+        pointer-events: none;
+        z-index: 100;
+      }
+      .parts-hint.visible {
+        opacity: 0.9;
+      }
+      
+      @media (max-width: 768px) {
+        .workspace {
+          flex-direction: column;
+        }
+        .baskets {
+          width: 100%;
+          max-height: 400px;
+        }
+        .ball {
+          width: 130px;
+          height: 130px;
+          font-size: 12px;
+        }
+        .modal-content {
+          width: 95%;
+        }
+        .analog-info {
+          flex-wrap: wrap;
+        }
+        .settings-dropdown {
+          right: 10px;
+          left: auto;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="controls">
+      <div style="position: relative;">
+        <input id="clientInput" placeholder="Клиент" autocomplete="off" list="clientsList" style="min-width: 200px;" />
+        <div class="phone-search-hint" style="font-size: 11px; color: #ff9800; margin-top: 2px; opacity: 0.7; position: absolute; bottom: -18px; left: 10px;">
+          💡 Можно ввести имя или последние 4 цифры телефона
+        </div>
+      </div>
+      <datalist id="clientsList"></datalist>
+      <input id="carInput" placeholder="Марка авто" autocomplete="off" />
+      <input id="phoneInput" placeholder="Телефон" autocomplete="off" />
+      <input id="taskInput" placeholder="Запрос (детали через запятую будут добавлены автоматически)" autocomplete="off" style="min-width: 300px;" />
+      
+      <button id="extractPartsBtn" style="background: #9c27b0;">🔧 Извлечь детали</button>
+
+      <select id="priority">
+        <option value="high">🔴 Срочно</option>
+        <option value="medium">🟡 Обычная</option>
+        <option value="low">🟢 Не срочно</option>
+      </select>
+
+      <select id="manager">
+        <option value="eduard">Эдуард</option>
+        <option value="gennady">Геннадий</option>
+        <option value="vyacheslav">Вячеслав</option>
+      </select>
+
+      <button id="addBtn">➕ Добавить</button>
+      <button id="clearEduardBtn" class="danger" style="background: #8b2c2c; display: none">
+        🗑 Очистить всё
+      </button>
+      
+      <div style="position: relative;">
+        <button id="settingsBtn" class="settings-btn">⚙️</button>
+        <div id="settingsDropdown" class="settings-dropdown">
+          <button id="archivesMenuBtn">📦 Архив задач</button>
+          <button id="clientsMenuBtn">👥 База клиентов</button>
+          <button id="suppliersMenuBtn">🏪 Поставщики</button>
+          <button id="dictionaryMenuBtn">📝 Словарь сокращений</button>
+          <div class="file-upload">
+            <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none" />
+            <button id="uploadXLSXBtn" style="width: 100%; background: #2196f3;">📂 Загрузить клиентов</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="partsHint" class="parts-hint">✨ Детали из запроса добавлены!</div>
+
+    <div class="workspace">
+      <div style="flex: 2;">
+        <div id="followupBlock" class="followup-block" style="display: none;">
+          <div class="followup-title">
+            📞 Кому написать сегодня
+            <span id="followupCount" style="background: #f44336; padding: 2px 8px; border-radius: 20px; font-size: 12px;">0</span>
+          </div>
+          <div id="followupList"></div>
+        </div>
+        <div id="balls" class="balls"></div>
+      </div>
+
+      <div class="baskets">
+        <div class="basket" data-manager="eduard">
+          <div class="basket-header">
+            <span>👨‍💼 Эдуард</span>
+            <span class="basket-count" id="count-eduard">0</span>
+          </div>
+          <div id="eduard"></div>
+        </div>
+        <div class="basket" data-manager="gennady">
+          <div class="basket-header">
+            <span>👨‍💼 Геннадий</span>
+            <span class="basket-count" id="count-gennady">0</span>
+          </div>
+          <div id="gennady"></div>
+        </div>
+        <div class="basket" data-manager="vyacheslav">
+          <div class="basket-header">
+            <span>👨‍💼 Вячеслав</span>
+            <span class="basket-count" id="count-vyacheslav">0</span>
+          </div>
+          <div id="vyacheslav"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="archiveModal" class="modal">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3>📦 Архив выполненных задач</h3>
+          <button class="close-btn" onclick="window.closeModal('archiveModal')">✖</button>
+        </div>
+        <input type="text" id="archiveSearch" class="search-input" placeholder="🔍 Поиск по клиенту, марке, запросу, менеджеру..." onkeyup="window.filterArchive()" />
+        <div id="archiveList" class="archive-list"></div>
+        <button onclick="window.closeModal('archiveModal')" style="width: 100%; margin-top: 15px">Закрыть</button>
+      </div>
+    </div>
+
+    <div id="clientsModal" class="modal">
+      <div class="modal-content modal-xxl">
+        <div class="modal-header">
+          <h3>👥 База клиентов</h3>
+          <button class="close-btn" onclick="window.closeModal('clientsModal')">✖</button>
+        </div>
+        <input type="text" id="clientsSearch" class="search-input" placeholder="🔍 Поиск по имени, телефону, марке авто..." onkeyup="window.filterClients()" />
+        <div id="clientsListContainer" class="archive-list" style="max-height: 500px"></div>
+        <div style="margin-top: 15px; display: flex; gap: 10px">
+          <button onclick="window.closeModal('clientsModal')" style="flex: 1">Закрыть</button>
+          <button id="exportClientsBtn" style="flex: 1; background: #4caf50">📥 Экспорт в Excel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="suppliersModal" class="modal">
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3>🏪 Список поставщиков</h3>
+          <button class="close-btn" onclick="window.closeModal('suppliersModal')">✖</button>
+        </div>
+        <div id="suppliersList" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px;"></div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="newSupplierName" placeholder="Название поставщика" style="flex: 1;">
+          <button onclick="window.addSupplier()">➕ Добавить</button>
+        </div>
+        <button onclick="window.closeModal('suppliersModal')" style="width: 100%; margin-top: 15px; background: #ff9800;">Закрыть</button>
+      </div>
+    </div>
+
+    <div id="dictionaryModal" class="modal">
+      <div class="modal-content modal-md">
+        <div class="modal-header">
+          <h3>📝 Словарь сокращений</h3>
+          <button class="close-btn" onclick="window.closeModal('dictionaryModal')">✖</button>
+        </div>
+        <div style="margin-bottom: 15px; padding: 10px; background: #0f1a24; border-radius: 8px; font-size: 13px;">
+          <p style="margin: 0;">🔤 Сокращения будут автоматически заменяться на полные названия при отправке клиенту.</p>
+        </div>
+        <div id="dictionaryList" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px;"></div>
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+          <input type="text" id="newAbbr" placeholder="Сокращение (например: ПТД)" style="flex: 1;">
+          <input type="text" id="newFullName" placeholder="Полное название" style="flex: 2;">
+          <button onclick="window.addDictionaryEntry()">➕ Добавить</button>
+        </div>
+        <button onclick="window.closeModal('dictionaryModal')" style="width: 100%; margin-top: 10px; background: #ff9800;">Закрыть</button>
+      </div>
+    </div>
+
+    <div id="editModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modalClient"></h3>
+          <button class="close-btn" onclick="window.closeModal('editModal')">✖</button>
+        </div>
+        <div id="modalCar" style="background: #ff9800; color: #0f1a24; padding: 6px 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; display: inline-block;"></div>
+        <div id="modalTaskText" style="background: #1a2a3a; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; color: #ddd;"></div>
+
+        <div style="display:flex; gap:10px; margin:15px 0;">
+          <button onclick="window.setStatus('quoted')" style="flex:1; background:#ff9800; color:#0f1a24; font-weight:bold;">⏳ Ждём ответа</button>
+          <button onclick="window.setStatus('ordered')" style="flex:1; background:#4caf50; color:white; font-weight:bold;">✅ Заказал</button>
+          <button onclick="window.setStatus('lost')" style="flex:1; background:#f44336; color:white; font-weight:bold;">❌ Не купил</button>
+        </div>
+
+        <button id="autoDetectBtn" class="auto-btn" style="width: 100%; margin-bottom: 15px;">🤖 Авто-подбор деталей</button>
+
+        <div style="background: #0f1a24; padding: 15px; border-radius: 12px; margin-bottom: 15px;">
+          <h4 style="margin: 0 0 10px 0; color: #ff9800;">➕ Новая деталь</h4>
+          <input id="newPartName" placeholder="Название детали" style="width: 100%; margin-bottom: 8px;" />
+          <input id="newPartOriginal" placeholder="Оригинальный артикул *" style="width: 100%; margin-bottom: 8px;" />
+          <button onclick="window.addNewPart()" style="width: 100%; background: #4caf50;">➕ Добавить деталь</button>
+        </div>
+
+        <div id="partsList"></div>
+
+        <textarea id="managerComment" placeholder="Комментарий менеджера" rows="3" style="width: 100%; margin: 15px 0"></textarea>
+
+        <button onclick="window.saveParts()" style="width: 100%; background: #4caf50">💾 Сохранить всё</button>
+      </div>
+    </div>
+
+    <div id="viewModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h3 id="viewClient" style="display: inline-block; margin-right: 10px"></h3>
+            <span id="viewManagerBadge" class="manager-badge"></span>
+          </div>
+          <button class="close-btn" onclick="window.closeModal('viewModal')">✖</button>
+        </div>
+        <div id="viewCar" style="background: #ff9800; color: #0f1a24; padding: 4px 10px; border-radius: 8px; margin-bottom: 10px; font-size: 12px; display: inline-block;"></div>
+        <div id="viewTaskText" style="background: #1a2a3a; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; color: #ddd;"></div>
+        
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+          <button onclick="window.sendToTG()" style="flex:1; background:#0088cc;">📱 Telegram</button>
+          <button onclick="window.sendToWA()" style="flex:1; background:#25D366;">💬 WhatsApp</button>
+          <button onclick="window.copyMessage()" style="flex:1; background:#ff9800;">📋 Копировать</button>
+          <button onclick="window.editCurrentArchivedTask()" style="flex:1; background:#2196f3;">✏️ Редактировать</button>
+        </div>
+        
+        <button onclick="window.showHistory()" style="width: 100%; margin-bottom: 15px">📜 История клиента</button>
+        <div id="viewParts"></div>
+        <div id="viewComment" style="margin-top: 10px; padding: 10px; background: #1a2a3a; border-radius: 8px;"></div>
+        <hr />
+        <div id="historyBlock"></div>
+        <button onclick="window.closeModal('viewModal')" style="width: 100%; margin-top: 15px; background: #ff9800">Закрыть</button>
+      </div>
+    </div>
+
+    <div class="stats" id="stats"></div>
+    <div class="signature">⚙️ CRM v8.2 | Исправлено добавление аналогов и загрузка деталей</div>
+
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+      import {
+        getFirestore,
+        collection,
+        addDoc,
+        updateDoc,
+        onSnapshot,
+        getDocs,
+        doc,
+        query,
+        where,
+        writeBatch,
+        setDoc,
+      } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+      // ========== ВАШИ РЕАЛЬНЫЕ КЛЮЧИ FIREBASE ==========
+      const firebaseConfig = {
+        apiKey: "AIzaSyAsQtx9omBId3p88spa7c_i8w10bp5N2n4",
+        authDomain: "shary-tasks.firebaseapp.com",
+        projectId: "shary-tasks",
+        storageBucket: "shary-tasks.firebasestorage.app",
+        messagingSenderId: "51153486686",
+        appId: "1:51153486686:web:e4e355ebf1d5777d78c5cf"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+
+      let currentId = localStorage.getItem("currentTaskId") || null;
+      let currentClient = "";
+      let parts = [];
+      let currentTaskText = "";
+      let allArchivedTasks = [];
+      let allClients = [];
+      let suppliers = ["Автодок", "Exist", "Emex", "Передовые технологии", "АвтоАльянс", "АВТОРИЯ", "Мега-Запчасть"];
+      let dictionary = [];
+      let nextPartId = 1;
+
+      const namesList = [
+        "Александр","Сергей","Роман","Антонина","Владимир","Иван","Дмитрий",
+        "Андрей","Алексей","Максим","Евгений","Михаил","Никита","Павел",
+        "Ольга","Елена","Наталья","Мария","Анна","Татьяна","Людмила",
+        "Вадим","Халил","Эдуард","Геннадий","Вячеслав","Юрий","Виктор",
+        "Николай","Василий","Петр","Степан","Константин","Леонид",
+        "Артем","Арсений","Даниил","Тимофей","Матвей","Георгий","Егор"
+      ];
+
+      function normalize(word) { if (!word) return ""; return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(); }
+      function clean(word) { return word.replace(/[^a-zA-Zа-яА-ЯёЁ]/g, ""); }
+      function isName(word) { return namesList.includes(normalize(word)); }
+      function getName(raw) {
+        if (!raw) return "";
+        let parts = raw.split(/\s+/).map(clean).filter(p => p);
+        if (parts.length === 0) return "";
+        for (let p of parts) if (isName(p)) return normalize(p);
+        if (parts.length >= 3) return normalize(parts[1]);
+        if (parts.length === 2) return normalize(parts[0]);
+        return "";
+      }
+
+      function extractParts(text) {
+        if (!text) return [];
+        const fromComma = extractPartsFromText(text);
+        if (fromComma.length > 0) return fromComma;
+        const auto = autoDetectParts(text);
+        return auto;
+      }
+
+      function extractPartsFromText(text) {
+        if (!text) return [];
+        let partsList = [];
+        const colonPatterns = /(?:нужны?|требуются?|необходимы?|запчасти|детали|купить|заказать|подобрать)\s*:\s*([^.!?]+)/gi;
+        let match;
+        while ((match = colonPatterns.exec(text)) !== null) {
+          const listText = match[1];
+          const items = listText.split(/[,，]\s*|\s+и\s+|\s*,\s*/).filter(i => i.trim().length > 0);
+          partsList.push(...items);
+        }
+        if (partsList.length === 0) {
+          const commaPattern = /([^.!?]*?(?:[а-яА-ЯёЁ]+,\s*[а-яА-ЯёЁ]+[^.!?]*))/gi;
+          while ((match = commaPattern.exec(text)) !== null) {
+            const candidate = match[1];
+            if (candidate.includes(',') && candidate.length < 150) {
+              const items = candidate.split(/[,，]\s*/).filter(i => i.trim().length > 0 && i.trim().length < 50);
+              if (items.length >= 2) {
+                partsList.push(...items);
+              }
+            }
+          }
+        }
+        const uniqueParts = [];
+        const seen = new Set();
+        for (let item of partsList) {
+          let cleanItem = item.trim().replace(/^[-–—\s]+|[-–—\s]+$/g, '');
+          cleanItem = cleanItem.replace(/^(нужны?|требуются?|необходимы?|запчасти|детали)\s*/i, '');
+          cleanItem = cleanItem.replace(/[.!?]+$/, '');
+          if (cleanItem && cleanItem.length > 1 && cleanItem.length < 60) {
+            cleanItem = cleanItem.charAt(0).toUpperCase() + cleanItem.slice(1).toLowerCase();
+            if (!seen.has(cleanItem)) {
+              seen.add(cleanItem);
+              uniqueParts.push({ name: cleanItem, originalNumber: "" });
+            }
+          }
+        }
+        return uniqueParts;
+      }
+      
+      function autoDetectParts(text) {
+        const lowerText = text.toLowerCase();
+        const detectedParts = [];
+        if (lowerText.includes("тормоз") || lowerText.includes("колодк") || lowerText.includes("диск")) {
+          if (lowerText.includes("перед") || (!lowerText.includes("зад") && !lowerText.includes("тыл"))) {
+            detectedParts.push({ name: "ПТД", originalNumber: "" });
+            detectedParts.push({ name: "ПТК", originalNumber: "" });
+          }
+          if (lowerText.includes("зад") || lowerText.includes("тыл")) {
+            detectedParts.push({ name: "ЗТД", originalNumber: "" });
+            detectedParts.push({ name: "ЗТК", originalNumber: "" });
+          }
+          if (!lowerText.includes("перед") && !lowerText.includes("зад") && !lowerText.includes("тыл")) {
+            if (!detectedParts.some(p => p.name === "ПТД")) detectedParts.push({ name: "ПТД", originalNumber: "" });
+            if (!detectedParts.some(p => p.name === "ПТК")) detectedParts.push({ name: "ПТК", originalNumber: "" });
+            if (!detectedParts.some(p => p.name === "ЗТД")) detectedParts.push({ name: "ЗТД", originalNumber: "" });
+            if (!detectedParts.some(p => p.name === "ЗТК")) detectedParts.push({ name: "ЗТК", originalNumber: "" });
+          }
+        }
+        if (lowerText.includes("масл") || lowerText.includes("фильтр")) {
+          if (lowerText.includes("двигател") || lowerText.includes("мотор")) {
+            detectedParts.push({ name: "Масло моторное", originalNumber: "" });
+            detectedParts.push({ name: "Фильтр масляный", originalNumber: "" });
+            detectedParts.push({ name: "Фильтр воздушный", originalNumber: "" });
+          }
+          if (lowerText.includes("коробк") || lowerText.includes("акпп") || lowerText.includes("мекпп")) {
+            detectedParts.push({ name: "Масло трансмиссионное", originalNumber: "" });
+          }
+          if (lowerText.includes("салон")) {
+            detectedParts.push({ name: "Фильтр салонный", originalNumber: "" });
+          }
+        }
+        if (lowerText.includes("амортизатор") || lowerText.includes("стоек") || lowerText.includes("стойк")) {
+          if (lowerText.includes("перед")) {
+            detectedParts.push({ name: "Амортизаторы передние", originalNumber: "" });
+          }
+          if (lowerText.includes("зад")) {
+            detectedParts.push({ name: "Амортизаторы задние", originalNumber: "" });
+          }
+          if (!lowerText.includes("перед") && !lowerText.includes("зад")) {
+            detectedParts.push({ name: "Амортизаторы передние", originalNumber: "" });
+            detectedParts.push({ name: "Амортизаторы задние", originalNumber: "" });
+          }
+        }
+        if (lowerText.includes("сайлент") || lowerText.includes("рычаг")) {
+          detectedParts.push({ name: "Сайлентблоки", originalNumber: "" });
+          if (lowerText.includes("перед")) detectedParts.push({ name: "Рычаги передние", originalNumber: "" });
+          if (lowerText.includes("зад")) detectedParts.push({ name: "Рычаги задние", originalNumber: "" });
+        }
+        if (lowerText.includes("гур") || lowerText.includes("насос гур")) {
+          detectedParts.push({ name: "ГУР", originalNumber: "" });
+        }
+        if (lowerText.includes("рейк") || lowerText.includes("рулевая рейка")) {
+          detectedParts.push({ name: "Рулевая рейка", originalNumber: "" });
+        }
+        if (lowerText.includes("наконечник") || lowerText.includes("рулевой наконечник")) {
+          detectedParts.push({ name: "Наконечники рулевые", originalNumber: "" });
+        }
+        if (lowerText.includes("ремень") || lowerText.includes("грм")) {
+          detectedParts.push({ name: "Ремень ГРМ", originalNumber: "" });
+          detectedParts.push({ name: "Ролики ГРМ", originalNumber: "" });
+        }
+        if (lowerText.includes("свеч") || lowerText.includes("зажигания")) {
+          detectedParts.push({ name: "Свечи зажигания", originalNumber: "" });
+        }
+        if (lowerText.includes("шрус") || lowerText.includes("граната")) {
+          if (lowerText.includes("внутрен")) {
+            detectedParts.push({ name: "ШРУС внутренний", originalNumber: "" });
+          } else if (lowerText.includes("наружн")) {
+            detectedParts.push({ name: "ШРУС наружный", originalNumber: "" });
+          } else {
+            detectedParts.push({ name: "ШРУС", originalNumber: "" });
+          }
+        }
+        const uniqueParts = [];
+        const seenNames = new Set();
+        for (const part of detectedParts) {
+          if (!seenNames.has(part.name)) {
+            seenNames.add(part.name);
+            uniqueParts.push(part);
+          }
+        }
+        return uniqueParts;
+      }
+      
+      function showPartsHint(message) {
+        const hint = document.getElementById('partsHint');
+        hint.textContent = message || '✨ Детали из запроса добавлены!';
+        hint.classList.add('visible');
+        setTimeout(() => {
+          hint.classList.remove('visible');
+        }, 3000);
+      }
+      
+      function addPartsToCurrentTask(partsToAdd) {
+        if (!partsToAdd || partsToAdd.length === 0) return 0;
+        let addedCount = 0;
+        for (const part of partsToAdd) {
+          const exists = parts.some(p => p.name.toLowerCase() === part.name.toLowerCase());
+          if (!exists) {
+            parts.push({
+              id: nextPartId++,
+              name: part.name,
+              originalNumber: "",
+              analogs: []
+            });
+            addedCount++;
+          }
+        }
+        if (addedCount > 0) {
+          renderParts();
+          showPartsHint(`✨ Добавлено ${addedCount} деталей из запроса`);
+        }
+        return addedCount;
+      }
+      
+      window.extractAndAddParts = function() {
+        if (currentId && document.getElementById("editModal").style.display === "flex") {
+          const taskText = document.getElementById("modalTaskText").innerText.replace("📋 ", "");
+          const detectedParts = extractParts(taskText);
+          if (detectedParts.length === 0) {
+            showToast("🤖 Не найдено деталей в тексте запроса. Используйте запятые для разделения.", true);
+            return;
+          }
+          addPartsToCurrentTask(detectedParts);
+        } else {
+          showToast("⚠️ Сначала откройте задачу для редактирования", true);
+        }
+      };
+      
+      window.autoDetectAndAdd = function() {
+        const taskText = document.getElementById("modalTaskText").innerText.replace("📋 ", "");
+        const detected = extractParts(taskText);
+        if (detected.length === 0) {
+          showToast("🤖 Не удалось определить детали. Укажите их через запятую в тексте запроса.", true);
+          return;
+        }
+        addPartsToCurrentTask(detected);
+      };
+
+      window.setStatus = async function(status) {
+        if (!currentId) { showToast("Задача не выбрана", true); return; }
+        let nextContactAt = null;
+        const now = new Date();
+        if (status === "quoted") nextContactAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+        if (status === "ordered") nextContactAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        if (status === "lost") nextContactAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        try {
+          showLoading();
+          await updateDoc(doc(db, "tasks", currentId), {
+            status: status,
+            nextContactAt: nextContactAt.toISOString(),
+            statusUpdatedAt: now.toISOString()
+          });
+          showToast(`✅ Статус обновлён`);
+          window.closeModal("editModal");
+          setTimeout(() => loadFollowUpTasks(), 500);
+        } catch (e) { showToast("Ошибка: " + e.message, true); } finally { hideLoading(); }
+      };
+
+      async function getTasksToFollowUp() {
+        const now = new Date().toISOString();
+        try {
+          const snap = await getDocs(collection(db, "tasks"));
+          const result = [];
+          snap.forEach(doc => { const t = doc.data(); if (!t.done && t.nextContactAt && t.nextContactAt <= now) result.push({ id: doc.id, ...t }); });
+          result.sort((a, b) => new Date(a.nextContactAt) - new Date(b.nextContactAt));
+          return result;
+        } catch (e) { console.error(e); return []; }
+      }
+      
+      async function loadFollowUpTasks() {
+        try {
+          const tasks = await getTasksToFollowUp();
+          const followupBlock = document.getElementById("followupBlock");
+          const followupList = document.getElementById("followupList");
+          const followupCount = document.getElementById("followupCount");
+          if (tasks.length === 0) { followupBlock.style.display = "none"; return; }
+          followupBlock.style.display = "block";
+          followupCount.textContent = tasks.length;
+          followupList.innerHTML = "";
+          const now = new Date();
+          tasks.forEach(task => {
+            const taskDiv = document.createElement("div");
+            taskDiv.className = "followup-task";
+            const nextDate = new Date(task.nextContactAt);
+            const daysOverdue = Math.floor((now - nextDate) / (1000 * 60 * 60 * 24));
+            if (daysOverdue > 0) taskDiv.classList.add("urgent");
+            const statusText = task.status === "quoted" ? "⏳ Ждём ответа" : task.status === "ordered" ? "✅ Заказал" : task.status === "lost" ? "❌ Не купил" : "📌 Без статуса";
+            taskDiv.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong>${escapeHtml(task.client)}</strong>
+                <span style="font-size: 11px; background: #ff9800; color: #0f1a24; padding: 2px 6px; border-radius: 12px;">${statusText}</span>
+              </div>
+              <div style="font-size: 12px; color: #ff9800; margin-top: 4px;">🚗 ${escapeHtml(task.car || "—")}</div>
+              <div style="font-size: 12px; color: #aaa; margin-top: 4px;">📞 ${task.phone ? escapeHtml(task.phone) : "нет телефона"}</div>
+              <div style="font-size: 11px; color: #f44336; margin-top: 4px;">⏰ Связаться до: ${nextDate.toLocaleDateString("ru-RU")}</div>
+              <button class="followup-contact-btn" onclick="window.contactClient('${task.id}')">📞 Связаться</button>
+            `;
+            followupList.appendChild(taskDiv);
+          });
+        } catch (e) { console.error(e); }
+      }
+      
+      window.contactClient = async function(taskId) {
+        try {
+          const taskDoc = await getDocs(query(collection(db, "tasks"), where("__name__", "==", taskId)));
+          if (taskDoc.empty) { showToast("Задача не найдена", true); return; }
+          const task = { id: taskId, ...taskDoc.docs[0].data() };
+          window.currentViewTask = task;
+          document.getElementById("viewClient").innerText = task.client;
+          document.getElementById("viewManagerBadge").innerHTML = `👨‍💼 ${getManagerName(task.manager)}`;
+          document.getElementById("viewManagerBadge").className = `manager-badge ${getManagerBadgeClass(task.manager)}`;
+          document.getElementById("viewCar").innerHTML = `🚗 ${escapeHtml(task.car || "не указана")}`;
+          document.getElementById("viewTaskText").innerHTML = `📋 ${escapeHtml(task.text)}`;
+          renderViewParts(task.parts || []);
+          document.getElementById("viewComment").innerText = task.comment || "Нет комментария";
+          document.getElementById("historyBlock").innerHTML = "";
+          document.getElementById("viewModal").style.display = "flex";
+        } catch (e) { showToast("Ошибка: " + e.message, true); }
+      };
+
+      const settingsBtn = document.getElementById("settingsBtn");
+      const settingsDropdown = document.getElementById("settingsDropdown");
+      settingsBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); settingsDropdown.style.display = settingsDropdown.style.display === "flex" ? "none" : "flex"; });
+      document.addEventListener("click", (e) => { if (!settingsBtn.contains(e.target) && !settingsDropdown.contains(e.target)) settingsDropdown.style.display = "none"; });
+      document.getElementById("archivesMenuBtn").addEventListener("click", () => { settingsDropdown.style.display = "none"; window.openArchive(); });
+      document.getElementById("clientsMenuBtn").addEventListener("click", () => { settingsDropdown.style.display = "none"; window.openClients(); });
+      document.getElementById("suppliersMenuBtn").addEventListener("click", () => { settingsDropdown.style.display = "none"; window.openSuppliers(); });
+      document.getElementById("dictionaryMenuBtn").addEventListener("click", () => { settingsDropdown.style.display = "none"; window.openDictionary(); });
+      document.getElementById("uploadXLSXBtn").addEventListener("click", () => { settingsDropdown.style.display = "none"; document.getElementById("fileInput").click(); });
+
+      async function loadDictionary() {
+        try {
+          const settingsDoc = await getDocs(query(collection(db, "settings")));
+          let found = false;
+          settingsDoc.forEach((d) => { if (d.id === "dictionary") { dictionary = d.data().list || []; found = true; } });
+          if (!found) {
+            dictionary = [
+              { abbr: "ПТД", full: "Передние тормозные диски" },
+              { abbr: "ЗТД", full: "Задние тормозные диски" },
+              { abbr: "ПТК", full: "Передние тормозные колодки" },
+              { abbr: "ЗТК", full: "Задние тормозные колодки" },
+              { abbr: "ГУР", full: "Гидроусилитель руля" },
+              { abbr: "САЙЛ", full: "Сайлентблоки" },
+              { abbr: "ШРУС", full: "Шарнир равных угловых скоростей" }
+            ];
+            await setDoc(doc(db, "settings", "dictionary"), { list: dictionary });
+          }
+          renderDictionaryList();
+        } catch (e) { console.error(e); }
+      }
+
+      async function saveDictionary() { await setDoc(doc(db, "settings", "dictionary"), { list: dictionary }); }
+      window.addDictionaryEntry = async function() {
+        const abbr = document.getElementById("newAbbr")?.value.trim().toUpperCase();
+        const full = document.getElementById("newFullName")?.value.trim();
+        if (!abbr || !full) { showToast("Заполните оба поля!", true); return; }
+        if (dictionary.some(item => item.abbr === abbr)) { showToast("Такое сокращение уже есть!", true); return; }
+        dictionary.push({ abbr, full });
+        await saveDictionary();
+        renderDictionaryList();
+        document.getElementById("newAbbr").value = "";
+        document.getElementById("newFullName").value = "";
+        showToast(`✅ Сокращение "${abbr}" добавлено`);
+      };
+      window.removeDictionaryEntry = async function(index) {
+        if (confirm(`Удалить сокращение "${dictionary[index].abbr}"?`)) { dictionary.splice(index, 1); await saveDictionary(); renderDictionaryList(); showToast("✅ Сокращение удалено"); }
+      };
+      window.editDictionaryEntry = async function(index) {
+        const newFull = prompt("Введите новое полное название:", dictionary[index].full);
+        if (newFull && newFull.trim()) { dictionary[index].full = newFull.trim(); await saveDictionary(); renderDictionaryList(); showToast("✅ Полное название обновлено"); }
+      };
+      function renderDictionaryList() {
+        const container = document.getElementById("dictionaryList");
+        if (!container) return;
+        container.innerHTML = "";
+        if (dictionary.length === 0) { container.innerHTML = '<div style="text-align:center;color:#888;padding:20px;">Нет сокращений</div>'; return; }
+        dictionary.forEach((item, idx) => {
+          const div = document.createElement("div");
+          div.className = "dict-item";
+          div.innerHTML = `<span ondblclick="window.editDictionaryEntry(${idx})"><span class="dict-abbr">${escapeHtml(item.abbr)}</span> → <span class="dict-full">${escapeHtml(item.full)}</span></span><button onclick="window.removeDictionaryEntry(${idx})" style="background:#8b2c2c; padding: 4px 8px; font-size: 11px;">🗑</button>`;
+          container.appendChild(div);
+        });
+      }
+      window.openDictionary = function() { renderDictionaryList(); document.getElementById("dictionaryModal").style.display = "flex"; };
+
+      async function loadSuppliers() {
+        try {
+          const settingsDoc = await getDocs(query(collection(db, "settings")));
+          let found = false;
+          settingsDoc.forEach((d) => { if (d.id === "suppliers") { suppliers = d.data().list || suppliers; found = true; } });
+          if (!found) await setDoc(doc(db, "settings", "suppliers"), { list: suppliers });
+          renderSuppliersList();
+        } catch (e) { console.error(e); }
+      }
+      async function saveSuppliers() { await setDoc(doc(db, "settings", "suppliers"), { list: suppliers }); }
+      window.addSupplier = async function() {
+        const name = document.getElementById("newSupplierName")?.value.trim();
+        if (!name) { showToast("Введите название поставщика", true); return; }
+        if (suppliers.includes(name)) { showToast("Такой поставщик уже есть", true); return; }
+        suppliers.push(name);
+        await saveSuppliers();
+        renderSuppliersList();
+        document.getElementById("newSupplierName").value = "";
+        showToast(`✅ Поставщик "${name}" добавлен`);
+      };
+      window.removeSupplier = async function(index) {
+        if (confirm(`Удалить поставщика "${suppliers[index]}"?`)) { suppliers.splice(index, 1); await saveSuppliers(); renderSuppliersList(); showToast("✅ Поставщик удален"); }
+      };
+      function renderSuppliersList() {
+        const container = document.getElementById("suppliersList");
+        if (!container) return;
+        container.innerHTML = "";
+        suppliers.forEach((s, idx) => {
+          const div = document.createElement("div");
+          div.className = "supplier-item";
+          div.innerHTML = `<span ondblclick="window.editSupplier(${idx})">🏪 ${escapeHtml(s)}</span><button onclick="window.removeSupplier(${idx})" style="background:#8b2c2c; padding: 4px 8px; font-size: 11px;">🗑</button>`;
+          container.appendChild(div);
+        });
+        if (suppliers.length === 0) container.innerHTML = '<div style="text-align:center;color:#888;padding:20px;">Нет поставщиков</div>';
+      }
+      window.editSupplier = async function(index) {
+        const newName = prompt("Введите новое название поставщика:", suppliers[index]);
+        if (newName && newName.trim()) { suppliers[index] = newName.trim(); await saveSuppliers(); renderSuppliersList(); showToast("✅ Поставщик обновлен"); }
+      };
+      window.openSuppliers = function() { renderSuppliersList(); document.getElementById("suppliersModal").style.display = "flex"; };
+
+      function showToast(msg, isErr = false) {
+        let t = document.querySelector(".toast");
+        if (t) t.remove();
+        t = document.createElement("div");
+        t.className = "toast";
+        t.textContent = msg;
+        t.style.background = isErr ? "#c62828" : "#2e7d32";
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 2500);
+      }
+
+      function showLoading() {
+        let l = document.querySelector(".loading");
+        if (!l) { l = document.createElement("div"); l.className = "loading"; l.innerHTML = "⏳ Загрузка..."; document.body.appendChild(l); }
+        l.style.display = "block";
+      }
+      function hideLoading() { const l = document.querySelector(".loading"); if (l) l.style.display = "none"; }
+
+      window.closeModal = function(id) { document.getElementById(id).style.display = "none"; };
+
+      function formatTime(d) { return d ? new Date(d).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : ""; }
+      function formatDate(d) { return new Date(d).toLocaleDateString("ru-RU"); }
+      function getMinutesDiff(s, e) { return s && e ? Math.round((new Date(e) - new Date(s)) / 60000) : 0; }
+      function isToday(date) { return formatDate(date) === formatDate(new Date()); }
+      function escapeHtml(str) { if (!str) return ""; return str.replace(/[&<>]/g, m => { if (m === "&") return "&amp;"; if (m === "<") return "&lt;"; if (m === ">") return "&gt;"; return m; }); }
+      function getManagerName(manager) { switch(manager) { case "eduard": return "Эдуард"; case "gennady": return "Геннадий"; case "vyacheslav": return "Вячеслав"; default: return manager; } }
+      function getManagerBadgeClass(manager) { switch(manager) { case "eduard": return "manager-eduard"; case "gennady": return "manager-gennady"; case "vyacheslav": return "manager-vyacheslav"; default: return ""; } }
+
+      async function findAndFillClientData(searchValue) {
+        if (!searchValue || searchValue.trim() === "") return;
+        searchValue = searchValue.trim();
+        const isPhoneSearch = /^\d{1,4}$/.test(searchValue);
+        try {
+          let queryResult = [];
+          const clientsRef = collection(db, "clients");
+          if (isPhoneSearch) {
+            const allClientsSnapshot = await getDocs(clientsRef);
+            const matchingClients = [];
+            allClientsSnapshot.forEach(doc => {
+              const client = doc.data();
+              if (client.phone) {
+                const phoneDigits = client.phone.replace(/\D/g, '');
+                const lastDigits = phoneDigits.slice(-searchValue.length);
+                if (lastDigits === searchValue) {
+                  matchingClients.push({ id: doc.id, ...client });
+                }
+              }
+            });
+            queryResult = matchingClients;
+            if (queryResult.length === 1) {
+              fillClientData(queryResult[0]);
+              showToast(`📋 Найден клиент: ${queryResult[0].name}`);
+            } else if (queryResult.length > 1) {
+              showClientSelectionModal(queryResult, searchValue);
+              return;
+            } else {
+              showToast(`❌ Клиент с окончанием телефона "${searchValue}" не найден`, true);
+              return;
+            }
+          } else {
+            const q = query(clientsRef, where("name", "==", searchValue));
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+              const client = snapshot.docs[0].data();
+              fillClientData(client);
+              showToast(`📋 Данные клиента "${client.name}" загружены`);
+            }
+          }
+        } catch (e) {
+          console.error("Ошибка поиска клиента:", e);
+          showToast("Ошибка поиска клиента", true);
+        }
+      }
+      
+      function fillClientData(client) {
+        const carInput = document.getElementById("carInput");
+        const phoneInput = document.getElementById("phoneInput");
+        if (client.car && (!carInput.value || carInput.value === "")) {
+          carInput.value = client.car;
+        }
+        if (client.phone && (!phoneInput.value || phoneInput.value === "")) {
+          phoneInput.value = client.phone;
+        }
+      }
+      
+      function showClientSelectionModal(clients, searchDigits) {
+        const modal = document.createElement('div');
+        modal.style.cssText = `position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(0,0,0,0.95); display:flex; justify-content:center; align-items:center; z-index:10001;`;
+        modal.innerHTML = `<div style="background:#2d3e4e;padding:25px;border-radius:16px;width:500px;max-width:90%;max-height:80vh;overflow:auto;"><h3 style="margin:0 0 15px 0;color:#ff9800;">🔍 Найдено ${clients.length} клиентов с окончанием "${searchDigits}"</h3><div id="clientSelectList" style="max-height:400px;overflow-y:auto;"></div><button id="closeSelectModal" style="width:100%;margin-top:15px;background:#ff9800;padding:10px;">✖ Закрыть</button></div>`;
+        document.body.appendChild(modal);
+        const listContainer = modal.querySelector('#clientSelectList');
+        clients.forEach(client => {
+          const clientDiv = document.createElement('div');
+          clientDiv.style.cssText = `background:#1a2a3a;padding:12px;margin:8px 0;border-radius:8px;cursor:pointer;transition:all 0.2s;`;
+          clientDiv.innerHTML = `<div style="font-weight:bold;font-size:16px;">${escapeHtml(client.name)}</div><div style="color:#ff9800;font-size:12px;margin-top:5px;">📞 ${escapeHtml(client.phone || '—')}</div><div style="color:#4caf50;font-size:12px;">🚗 ${escapeHtml(client.car || '—')}</div>`;
+          clientDiv.onclick = () => { fillClientData(client); showToast(`📋 Выбран клиент: ${client.name}`); modal.remove(); };
+          clientDiv.onmouseenter = () => clientDiv.style.background = '#2a4a6a';
+          clientDiv.onmouseleave = () => clientDiv.style.background = '#1a2a3a';
+          listContainer.appendChild(clientDiv);
+        });
+        modal.querySelector('#closeSelectModal').onclick = () => modal.remove();
+        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+      }
+
+      async function saveClientToDB(clientName, car, phone) {
+        if (!clientName) return;
+        try {
+          const clientsRef = collection(db, "clients");
+          const q = query(clientsRef, where("name", "==", clientName));
+          const snapshot = await getDocs(q);
+          const clientData = { name: clientName, car: car || "", phone: phone || "", updatedAt: new Date().toISOString() };
+          if (snapshot.empty) {
+            clientData.createdAt = new Date().toISOString();
+            await addDoc(clientsRef, clientData);
+          } else {
+            const clientDoc = snapshot.docs[0];
+            const existingData = clientDoc.data();
+            const updateData = {};
+            if (car && !existingData.car) updateData.car = car;
+            if (phone && !existingData.phone) updateData.phone = phone;
+            updateData.updatedAt = new Date().toISOString();
+            if (Object.keys(updateData).length > 1) {
+              await updateDoc(doc(db, "clients", clientDoc.id), updateData);
+            }
+          }
+        } catch (e) { console.error(e); }
+      }
+
+      async function loadClients() {
+        try {
+          const snap = await getDocs(collection(db, "clients"));
+          allClients = [];
+          snap.forEach((doc) => { allClients.push({ id: doc.id, ...doc.data() }); });
+          const datalist = document.getElementById("clientsList");
+          datalist.innerHTML = "";
+          const namesSet = new Set();
+          allClients.forEach((c) => { if (c.name && !namesSet.has(c.name)) { namesSet.add(c.name); const option = document.createElement("option"); option.value = c.name; datalist.appendChild(option); } });
+          renderClientsList();
+        } catch (e) { console.error(e); }
+      }
+
+      function renderClientsList() {
+        const search = document.getElementById("clientsSearch")?.value.toLowerCase() || "";
+        const filtered = allClients.filter(c => (c.name && c.name.toLowerCase().includes(search)) || (c.phone && c.phone.includes(search)) || (c.car && c.car.toLowerCase().includes(search)));
+        const container = document.getElementById("clientsListContainer");
+        if (!container) return;
+        container.innerHTML = "";
+        if (filtered.length === 0) { container.innerHTML = '<div style="text-align:center;color:#888;padding:20px;">👥 Нет клиентов в базе</div>'; return; }
+        filtered.forEach((client) => {
+          const div = document.createElement("div");
+          div.className = "client-item";
+          div.innerHTML = `<div style="display: flex; justify-content: space-between; align-items: center;"><div><strong style="font-size: 16px;">${escapeHtml(client.name || "—")}</strong>${client.phone ? `<div class="client-phone">📞 ${escapeHtml(client.phone)}</div>` : ""}${client.car ? `<div class="client-car">🚗 ${escapeHtml(client.car)}</div>` : ""}</div><div><button onclick="window.useClientData('${escapeHtml(client.name)}', '${escapeHtml(client.car || "")}', '${escapeHtml(client.phone || "")}')" style="background:#4caf50; padding:5px 10px; font-size:12px;">📝 Создать задачу</button></div></div>`;
+          container.appendChild(div);
+        });
+      }
+
+      window.filterClients = function() { renderClientsList(); };
+      window.useClientData = function(name, car, phone) {
+        document.getElementById("clientInput").value = name;
+        document.getElementById("carInput").value = car || "";
+        document.getElementById("phoneInput").value = phone || "";
+        window.closeModal("clientsModal");
+        showToast(`👤 Данные клиента "${name}" вставлены`);
+        document.getElementById("taskInput").focus();
+      };
+      window.openClients = function() { document.getElementById("clientsModal").style.display = "flex"; if (document.getElementById("clientsSearch")) { document.getElementById("clientsSearch").value = ""; renderClientsList(); } };
+      window.exportClients = function() {
+        if (allClients.length === 0) { showToast("Нет клиентов для экспорта", true); return; }
+        const exportData = allClients.map(c => ({ Наименование: c.name || "", Телефон: c.phone || "", "Марка/Модель": c.car || "", VIN: c.vin || "", Email: c.email || "", Адрес: c.address || "", ИНН: c.inn || "", КПП: c.kpp || "", ОГРН: c.ogrn || "", Руководитель: c.director || "", "Дата создания": c.createdAt ? new Date(c.createdAt).toLocaleString("ru-RU") : "" }));
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Клиенты");
+        XLSX.writeFile(wb, `clients_export_${new Date().toISOString().slice(0, 19)}.xlsx`);
+        showToast(`📥 Экспортировано ${allClients.length} клиентов`);
+      };
+
+      function getDeliveryOptions() {
+        const now = new Date();
+        const isBeforeNoon = now.getHours() < 12;
+        let options = [{ value: "1 час", label: "🚀 1 час" }, { value: "1 день", label: "📦 1 день" }, { value: "2 дня", label: "📦 2 дня" }, { value: "3 дня", label: "📦 3 дня" }];
+        if (isBeforeNoon) options.unshift({ value: "сегодня в 16:00", label: "⏰ сегодня в 16:00" }, { value: "сегодня в 17:00", label: "⏰ сегодня в 17:00" });
+        return options;
+      }
+
+      function replaceAbbreviations(text) {
+        if (!text) return text;
+        let result = text;
+        dictionary.forEach(item => { const safeAbbr = item.abbr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); const regex = new RegExp(`\\b${safeAbbr}\\b`, 'gi'); result = result.replace(regex, item.full); });
+        return result;
+      }
+
+      window.addNewPart = function() {
+        const name = document.getElementById("newPartName").value.trim();
+        const originalNumber = document.getElementById("newPartOriginal").value.trim();
+        if (!originalNumber) { showToast("Оригинальный артикул обязателен!", true); return; }
+        parts.push({ id: nextPartId++, name: name || "Деталь", originalNumber: originalNumber, analogs: [] });
+        document.getElementById("newPartName").value = "";
+        document.getElementById("newPartOriginal").value = "";
+        renderParts();
+        showToast("✅ Деталь добавлена");
+      };
+      
+      window.addAnalog = function(partId, brand, number, supplier, price, delivery) {
+        const part = parts.find(p => p.id === partId);
+        if (part && brand && number) { part.analogs.push({ brand, number, supplier: supplier || "", price: price || "", delivery: delivery || "" }); renderParts(); showToast(`✅ Аналог ${brand} добавлен`); }
+      };
+      
+      window.removeAnalog = function(partId, analogIndex) {
+        const part = parts.find(p => p.id === partId);
+        if (part) { part.analogs.splice(analogIndex, 1); renderParts(); showToast("❌ Аналог удален"); }
+      };
+      
+      window.editAnalog = function(partId, analogIndex) {
+        const part = parts.find(p => p.id === partId);
+        if (!part) return;
+        const analog = part.analogs[analogIndex];
+        if (!analog) return;
+        const modal = document.createElement('div');
+        modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; z-index: 10000;`;
+        const deliveryOptions = getDeliveryOptions();
+        modal.innerHTML = `<div style="background: #2d3e4e; padding: 25px; border-radius: 16px; width: 500px; max-width: 90%;"><h3 style="margin:0 0 15px 0;color:#ff9800;">✏️ Редактировать аналог</h3><div style="margin-bottom:12px;"><label style="display:block;margin-bottom:5px;color:#ff9800;">Производитель</label><input type="text" id="editAnalogBrand" value="${escapeHtml(analog.brand)}" style="width:100%;padding:10px;border-radius:8px;background:#1a2a3a;color:white;border:1px solid #2a4a6a;"></div><div style="margin-bottom:12px;"><label style="display:block;margin-bottom:5px;color:#ff9800;">Артикул</label><input type="text" id="editAnalogNumber" value="${escapeHtml(analog.number)}" style="width:100%;padding:10px;border-radius:8px;background:#1a2a3a;color:white;border:1px solid #2a4a6a;"></div><div style="margin-bottom:12px;"><label style="display:block;margin-bottom:5px;color:#ff9800;">Поставщик</label><select id="editAnalogSupplier" style="width:100%;padding:10px;border-radius:8px;background:#1a2a3a;color:white;border:1px solid #2a4a6a;"><option value="">Не выбран</option>${suppliers.map(s => `<option value="${escapeHtml(s)}" ${analog.supplier === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}</select></div><div style="margin-bottom:12px;"><label style="display:block;margin-bottom:5px;color:#ff9800;">Цена (₽)</label><input type="number" id="editAnalogPrice" value="${analog.price || ''}" style="width:100%;padding:10px;border-radius:8px;background:#1a2a3a;color:white;border:1px solid #2a4a6a;"></div><div style="margin-bottom:20px;"><label style="display:block;margin-bottom:5px;color:#ff9800;">Срок поставки</label><select id="editAnalogDelivery" style="width:100%;padding:10px;border-radius:8px;background:#1a2a3a;color:white;border:1px solid #2a4a6a;"><option value="">Не указан</option>${deliveryOptions.map(opt => `<option value="${opt.value}" ${analog.delivery === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}</select></div><div style="display:flex;gap:10px;"><button id="saveEditAnalogBtn" style="flex:1;background:#4caf50;padding:10px;">💾 Сохранить</button><button id="cancelEditAnalogBtn" style="flex:1;background:#8b2c2c;padding:10px;">❌ Отмена</button></div></div>`;
+        document.body.appendChild(modal);
+        const saveBtn = modal.querySelector('#saveEditAnalogBtn');
+        const cancelBtn = modal.querySelector('#cancelEditAnalogBtn');
+        saveBtn.onclick = () => {
+          const newBrand = modal.querySelector('#editAnalogBrand').value.trim();
+          const newNumber = modal.querySelector('#editAnalogNumber').value.trim();
+          const newSupplier = modal.querySelector('#editAnalogSupplier').value;
+          const newPrice = modal.querySelector('#editAnalogPrice').value.trim();
+          const newDelivery = modal.querySelector('#editAnalogDelivery').value;
+          if (!newBrand || !newNumber) { showToast("Заполните производителя и артикул!", true); return; }
+          part.analogs[analogIndex] = { brand: newBrand, number: newNumber, supplier: newSupplier || "", price: newPrice || "", delivery: newDelivery || "" };
+          renderParts();
+          modal.remove();
+          showToast("✅ Аналог обновлён");
+        };
+        cancelBtn.onclick = () => modal.remove();
+        modal.onkeydown = (e) => { if (e.key === 'Escape') modal.remove(); };
+      };
+      
+      window.removePart = function(partId) {
+        if (confirm("Удалить деталь со всеми аналогами?")) { parts = parts.filter(p => p.id !== partId); renderParts(); showToast("❌ Деталь удалена"); }
+      };
+      
+      window.addAnalogFromInput = function(partId) {
+        const brandInput = document.getElementById(`analogBrand_${partId}`);
+        const numberInput = document.getElementById(`analogNumber_${partId}`);
+        const supplierInput = document.getElementById(`analogSupplier_${partId}`);
+        const priceInput = document.getElementById(`analogPrice_${partId}`);
+        const deliveryInput = document.getElementById(`analogDelivery_${partId}`);
+
+        if (!brandInput || !numberInput) {
+          showToast("Ошибка формы (input не найден)", true);
+          return;
+        }
+
+        const brand = brandInput.value.trim();
+        const number = numberInput.value.trim();
+        const supplier = supplierInput?.value || "";
+        const price = priceInput?.value.trim() || "";
+        const delivery = deliveryInput?.value || "";
+
+        if (!brand || !number) {
+          showToast("Заполните производителя и артикул!", true);
+          return;
+        }
+
+        const part = parts.find(p => p.id === partId);
+        if (!part) {
+          showToast("Деталь не найдена", true);
+          return;
+        }
+
+        part.analogs.push({
+          brand,
+          number,
+          supplier,
+          price,
+          delivery
+        });
+
+        renderParts();
+
+        brandInput.value = "";
+        numberInput.value = "";
+        if (supplierInput) supplierInput.value = "";
+        if (priceInput) priceInput.value = "";
+        if (deliveryInput) deliveryInput.value = "";
+
+        showToast(`✅ Аналог ${brand} добавлен`);
+      };
+      
+      function renderParts() {
+        const container = document.getElementById("partsList");
+        if (!container) return;
+        container.innerHTML = "";
+        if (parts.length === 0) { container.innerHTML = '<div style="color:#ff9800;text-align:center;padding:20px;">⚠️ Добавьте хотя бы одну деталь с оригинальным артикулом</div>'; return; }
+        const deliveryOptions = getDeliveryOptions();
+        parts.forEach(part => {
+          const partDiv = document.createElement("div");
+          partDiv.className = "part-card";
+          partDiv.innerHTML = `
+            <div class="part-header">
+              <div><span class="part-title">📦 ${escapeHtml(part.name)}</span><span class="part-original" onclick="navigator.clipboard.writeText('${escapeHtml(part.originalNumber)}'); showToast('📋 Оригинальный номер скопирован: ${escapeHtml(part.originalNumber)}')">🔗 Оригинал: ${escapeHtml(part.originalNumber)}</span></div>
+              <span class="delete-part" onclick="window.removePart(${part.id})">🗑</span>
+            </div>
+            <div class="analogs-list">
+              <div style="font-size: 12px; color: #ff9800; margin-bottom: 8px;">🔧 Аналоги (неоригинальные):</div>
+              ${part.analogs.length === 0 ? '<div style="color:#888; font-size:12px; padding:5px;">Нет аналогов</div>' : ''}
+              ${part.analogs.map((a, idx) => `
+                <div class="analog-item">
+                  <div class="analog-info" onclick="navigator.clipboard.writeText('${escapeHtml(a.number)}'); showToast('📋 Артикул скопирован: ${escapeHtml(a.number)}')">
+                    <span class="analog-brand">${escapeHtml(a.brand)}</span>
+                    <span class="analog-number">${escapeHtml(a.number)}</span>
+                    ${a.supplier ? `<span class="analog-supplier">🏪 ${escapeHtml(a.supplier)}</span>` : ''}
+                    ${a.price ? `<span class="analog-price">💰 ${escapeHtml(a.price)} ₽</span>` : ''}
+                    ${a.delivery ? `<span class="analog-delivery">⏱ ${escapeHtml(a.delivery)}</span>` : ''}
+                  </div>
+                  <div style="display: flex; gap: 5px;">
+                    <span class="edit-analog" onclick="window.editAnalog(${part.id}, ${idx})" title="Редактировать">✏️</span>
+                    <span class="delete-analog" onclick="window.removeAnalog(${part.id}, ${idx})" title="Удалить">🗑</span>
+                  </div>
+                </div>
+              `).join('')}
+              <div class="add-analog-form">
+                <input type="text" id="analogBrand_${part.id}" placeholder="Производитель" style="flex:1">
+                <input type="text" id="analogNumber_${part.id}" placeholder="Артикул" style="flex:1">
+                <select id="analogSupplier_${part.id}" style="flex:1"><option value="">Поставщик</option>${suppliers.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}</select>
+                <input type="number" id="analogPrice_${part.id}" placeholder="Цена ₽" style="flex:0.7">
+                <select id="analogDelivery_${part.id}" style="flex:0.7"><option value="">Срок</option>${deliveryOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}</select>
+                <button onclick="window.addAnalogFromInput(${part.id})">➕</button>
+              </div>
+            </div>
+          `;
+          container.appendChild(partDiv);
+        });
+      }
+      
+      function validateParts() { return parts.length > 0; }
+
+      window.saveParts = async function() {
+        if (!currentId) return;
+        if (!validateParts()) { showToast("⚠️ Добавьте хотя бы одну деталь с оригинальным артикулом!", true); return; }
+        try {
+          showLoading();
+          await updateDoc(doc(db, "tasks", currentId), { parts: parts, comment: document.getElementById("managerComment").value });
+          window.closeModal("editModal");
+          showToast("✅ Сохранено");
+          if (window.currentViewTask) setTimeout(() => window.openArchive(), 500);
+        } catch (e) { showToast("Ошибка: " + e.message, true); } finally { hideLoading(); }
+      };
+
+      function renderViewParts(partsList) {
+        const container = document.getElementById("viewParts");
+        if (!container) return;
+        container.innerHTML = "";
+        if (!partsList || partsList.length === 0) { container.innerHTML = '<div style="color:#888;padding:10px;">📭 Нет добавленных деталей</div>'; return; }
+        partsList.forEach(part => {
+          const partDiv = document.createElement("div");
+          partDiv.className = "part-card";
+          partDiv.style.marginBottom = "10px";
+          partDiv.innerHTML = `
+            <div class="part-header" style="cursor: default;"><div><span class="part-title">📦 ${escapeHtml(part.name)}</span><span class="part-original" onclick="navigator.clipboard.writeText('${escapeHtml(part.originalNumber)}'); showToast('📋 Оригинальный номер скопирован: ${escapeHtml(part.originalNumber)}')">🔗 Оригинал: ${escapeHtml(part.originalNumber)}</span></div></div>
+            <div class="analogs-list">${part.analogs && part.analogs.length > 0 ? `<div style="font-size: 12px; color: #ff9800; margin-bottom: 8px;">🔧 Аналоги:</div>${part.analogs.map(a => `<div class="analog-item" style="cursor: pointer;" onclick="navigator.clipboard.writeText('${escapeHtml(a.number)}'); showToast('📋 Артикул скопирован: ${escapeHtml(a.number)}')"><div class="analog-info"><span class="analog-brand">${escapeHtml(a.brand)}</span><span class="analog-number">${escapeHtml(a.number)}</span>${a.supplier ? `<span class="analog-supplier">🏪 ${escapeHtml(a.supplier)}</span>` : ''}${a.price ? `<span class="analog-price">💰 ${escapeHtml(a.price)} ₽</span>` : ''}${a.delivery ? `<span class="analog-delivery">⏱ ${escapeHtml(a.delivery)}</span>` : ''}</div><span style="font-size:11px; color:#ff9800;">📋</span></div>`).join('')}` : '<div style="color:#888; font-size:12px; padding:5px;">Нет аналогов</div>'}</div>
+          `;
+          container.appendChild(partDiv);
+        });
+      }
+
+      function getTitle(count) { return count === 1 ? "нашли вариант:" : "подобрали несколько вариантов:"; }
+      function getFooter(count) { return count === 1 ? "Если подходит — оформим 👍" : "Напишите, какой вариант подходит — оформим 👍"; }
+      
+      function buildMessage(task) {
+        let clientName = getName(task.client);
+        let namePrefix = clientName ? `${clientName},` : "";
+        let allAnalogs = [];
+        if (task.parts && task.parts.length) {
+          task.parts.forEach((part) => {
+            let partName = replaceAbbreviations(part.name);
+            if (part.analogs && part.analogs.length) {
+              part.analogs.forEach(a => { allAnalogs.push({ partName: partName, brand: replaceAbbreviations(a.brand), price: a.price, delivery: a.delivery }); });
+            }
+          });
+        }
+        if (allAnalogs.length > 0) {
+          let title = getTitle(allAnalogs.length);
+          let msg = `${namePrefix} ${title}\n\n`;
+          const groupedByPart = {};
+          allAnalogs.forEach(analog => { if (!groupedByPart[analog.partName]) groupedByPart[analog.partName] = []; groupedByPart[analog.partName].push(analog); });
+          for (const [partName, analogs] of Object.entries(groupedByPart)) {
+            msg += `📌 ${partName}\n`;
+            analogs.forEach(a => { msg += `• ${a.brand} — ${a.price} ₽`; if (a.delivery) msg += ` (срок: ${a.delivery})`; msg += `\n`; });
+            msg += `\n`;
+          }
+          msg += getFooter(allAnalogs.length);
+          return msg;
+        }
+        let taskText = replaceAbbreviations(task.text);
+        let msg = `${namePrefix} ${getTitle(1)}\n\n📌 ${taskText}\n\n${getFooter(1)}`;
+        return msg;
+      }
+
+      window.sendToTG = function() {
+        if (!window.currentViewTask) { showToast("Задача не найдена", true); return; }
+        const task = window.currentViewTask;
+        const text = encodeURIComponent(buildMessage(task));
+        let phone = (task.phone || "").replace(/\D/g, "");
+        if (!phone) { window.open(`https://t.me/share/url?url=&text=${text}`, "_blank"); } else {
+          let cleanPhone = phone; if (cleanPhone.startsWith('8')) cleanPhone = '7' + cleanPhone.slice(1);
+          if (cleanPhone.startsWith('7') && cleanPhone.length === 11) { window.open(`https://t.me/+${cleanPhone}?text=${text}`, "_blank"); } else { window.open(`https://t.me/share/url?url=&text=${text}`, "_blank"); }
+        }
+        showToast("📱 Открыт Telegram");
+      };
+
+      window.sendToWA = function() {
+        if (!window.currentViewTask) { showToast("Задача не найдена", true); return; }
+        const task = window.currentViewTask;
+        const text = encodeURIComponent(buildMessage(task));
+        let phone = (task.phone || "").replace(/\D/g, "");
+        if (!phone) { showToast("Нет номера телефона для WhatsApp", true); return; }
+        let cleanPhone = phone; if (cleanPhone.startsWith('8')) cleanPhone = '7' + cleanPhone.slice(1);
+        if (cleanPhone.length >= 10) { window.open(`https://wa.me/${cleanPhone}?text=${text}`, "_blank"); showToast("💬 Открыт WhatsApp"); } else { showToast("Неверный формат номера", true); }
+      };
+
+      window.copyMessage = function() {
+        if (!window.currentViewTask) { showToast("Задача не найдена", true); return; }
+        const text = buildMessage(window.currentViewTask);
+        navigator.clipboard.writeText(text);
+        showToast("✅ Сообщение скопировано в буфер!");
+      };
+
+      window.showArchivedDetails = function(task) {
+        window.currentViewTask = task;
+        document.getElementById("viewClient").innerText = task.client;
+        document.getElementById("viewManagerBadge").innerHTML = `👨‍💼 ${getManagerName(task.manager)}`;
+        document.getElementById("viewManagerBadge").className = `manager-badge ${getManagerBadgeClass(task.manager)}`;
+        document.getElementById("viewCar").innerHTML = `🚗 ${escapeHtml(task.car || "не указана")}`;
+        document.getElementById("viewTaskText").innerHTML = `📋 ${escapeHtml(task.text)}`;
+        renderViewParts(task.parts || []);
+        document.getElementById("viewComment").innerText = task.comment || "Нет комментария";
+        document.getElementById("historyBlock").innerHTML = "";
+        document.getElementById("viewModal").style.display = "flex";
+      };
+
+      window.editArchivedTask = async function(taskId, event) {
+        if (event) event.stopPropagation();
+        try {
+          showLoading();
+          const taskDoc = await getDocs(query(collection(db, "tasks"), where("__name__", "==", taskId)));
+          if (taskDoc.empty) throw new Error("Задача не найдена");
+          const task = { id: taskId, ...taskDoc.docs[0].data() };
+          currentId = taskId;
+          localStorage.setItem("currentTaskId", taskId);
+          currentClient = task.client;
+          
+          parts = (task.parts || []).map((p, idx) => ({
+            id: idx + 1,
+            name: p.name || "Деталь",
+            originalNumber: p.originalNumber || "",
+            analogs: p.analogs || []
+          }));
+          nextPartId = parts.length + 1;
+          
+          currentTaskText = task.text;
+          document.getElementById("modalClient").innerText = task.client;
+          document.getElementById("modalCar").innerHTML = `🚗 ${escapeHtml(task.car || "не указана")}`;
+          document.getElementById("modalTaskText").innerHTML = `📋 ${escapeHtml(task.text)}`;
+          document.getElementById("managerComment").value = task.comment || "";
+          renderParts();
+          document.getElementById("editModal").style.display = "flex";
+          showToast("✏️ Редактирование выполненной задачи");
+        } catch (e) { showToast("Ошибка: " + e.message, true); } finally { hideLoading(); }
+      };
+      
+      window.editCurrentArchivedTask = function() {
+        if (!window.currentViewTask) { showToast("Задача не найдена", true); return; }
+        window.editArchivedTask(window.currentViewTask.id);
+      };
+
+      window.showHistory = async function() {
+        const block = document.getElementById("historyBlock");
+        block.innerHTML = "⏳ Загрузка...";
+        try {
+          const snap = await getDocs(query(collection(db, "tasks"), where("client", "==", currentClient), where("done", "==", true)));
+          block.innerHTML = "";
+          if (snap.empty) { block.innerHTML = '<div style="text-align:center;color:#888;">📭 Нет истории</div>'; return; }
+          snap.forEach((d) => {
+            const t = d.data();
+            const div = document.createElement("div");
+            div.className = "task";
+            div.innerHTML = `<div class="task-header"><span>🕐 ${formatTime(t.doneAt)}</span><span>⚡ ${getMinutesDiff(t.createdAt, t.doneAt)} мин</span></div><div class="task-info-row"><span class="task-client"><strong>${escapeHtml(t.client)}</strong></span><span class="task-car">🚗 ${escapeHtml(t.car || "—")}</span><span class="task-text">📋 ${escapeHtml(t.text)}</span></div>`;
+            block.appendChild(div);
+          });
+        } catch (e) { block.innerHTML = '<div style="color:red;">Ошибка</div>'; }
+      };
+
+      window.addTask = async function() {
+        const client = document.getElementById("clientInput").value.trim();
+        const car = document.getElementById("carInput").value.trim();
+        const phone = document.getElementById("phoneInput").value.trim();
+        const text = document.getElementById("taskInput").value.trim();
+        if (!client || !text) { showToast("Заполните клиента и запрос!", true); return; }
+        await saveClientToDB(client, car, phone);
+        const extractedParts = extractParts(text);
+        try {
+          showLoading();
+          const taskData = { client, car: car || "", phone: phone || "", text, priority: document.getElementById("priority").value, manager: document.getElementById("manager").value, done: false, parts: [], comment: "", createdAt: new Date().toISOString() };
+          const docRef = await addDoc(collection(db, "tasks"), taskData);
+          if (extractedParts.length > 0) {
+            const newParts = extractedParts.map((part, idx) => ({ id: idx + 1, name: part.name, originalNumber: "", analogs: [] }));
+            await updateDoc(doc(db, "tasks", docRef.id), { parts: newParts });
+            showPartsHint(`✨ Автоматически добавлено ${extractedParts.length} деталей из запроса`);
+          }
+          document.getElementById("clientInput").value = "";
+          document.getElementById("carInput").value = "";
+          document.getElementById("phoneInput").value = "";
+          document.getElementById("taskInput").value = "";
+          showToast("✅ Задача добавлена");
+          loadClients();
+        } catch (e) { showToast("Ошибка: " + e.message, true); } finally { hideLoading(); }
+      };
+
+      window.restoreTask = async function(taskId, event) {
+        event.stopPropagation();
+        try {
+          showLoading();
+          await updateDoc(doc(db, "tasks", taskId), { done: false });
+          showToast("✅ Задача восстановлена в активные");
+          await window.openArchive();
+        } catch (e) { showToast("Ошибка: " + e.message, true); } finally { hideLoading(); }
+      };
+
+      window.filterArchive = function() {
+        const search = document.getElementById("archiveSearch").value.toLowerCase();
+        const filtered = allArchivedTasks.filter(t => t.client.toLowerCase().includes(search) || (t.car && t.car.toLowerCase().includes(search)) || t.text.toLowerCase().includes(search) || t.manager.includes(search));
+        renderArchiveList(filtered);
+      };
+
+      function renderArchiveList(tasks) {
+        const container = document.getElementById("archiveList");
+        if (!container) return;
+        container.innerHTML = "";
+        if (tasks.length === 0) { container.innerHTML = '<div style="text-align:center;color:#888;padding:20px;">📭 Нет задач в архиве</div>'; return; }
+        tasks.forEach((t) => {
+          const div = document.createElement("div");
+          div.className = "archive-item";
+          div.onclick = () => window.showArchivedDetails(t);
+          div.innerHTML = `<div class="archive-date">📅 ${formatDate(t.doneAt)} | ${formatTime(t.doneAt)} | <span class="${getManagerBadgeClass(t.manager)}" style="padding:2px 8px;border-radius:12px;font-size:10px;">👨‍💼 ${getManagerName(t.manager)}</span></div><div class="task-info-row" style="margin: 8px 0;"><span class="task-client"><strong>${escapeHtml(t.client)}</strong></span><span class="task-car">🚗 ${escapeHtml(t.car || "—")}</span><span class="task-text">📋 ${escapeHtml(t.text)}</span></div><div style="font-size:12px;color:#aaa;">💬 ${escapeHtml(t.comment || "Нет комментария")}</div><div style="display: flex; gap: 8px; margin-top: 8px;"><button class="restore-btn" onclick="window.editArchivedTask('${t.id}', event)" style="background: #2196f3;">✏️ Редактировать</button><button class="restore-btn" onclick="window.restoreTask('${t.id}', event)">↩️ Восстановить</button></div>`;
+          container.appendChild(div);
+        });
+      }
+
+      window.openArchive = async function() {
+        document.getElementById("archiveModal").style.display = "flex";
+        document.getElementById("archiveSearch").value = "";
+        showLoading();
+        try {
+          const snap = await getDocs(query(collection(db, "tasks"), where("done", "==", true)));
+          allArchivedTasks = [];
+          snap.forEach((d) => { allArchivedTasks.push({ id: d.id, ...d.data() }); });
+          allArchivedTasks.sort((a, b) => new Date(b.doneAt) - new Date(a.doneAt));
+          renderArchiveList(allArchivedTasks);
+        } catch (e) { console.error(e); showToast("Ошибка загрузки архива: " + e.message, true); } finally { hideLoading(); }
+      };
+
+      let draggedId = null;
+
+      function setupDropZones() {
+        document.querySelectorAll(".basket").forEach((b) => {
+          b.ondragover = (e) => { e.preventDefault(); b.classList.add("drag-over"); };
+          b.ondragleave = () => b.classList.remove("drag-over");
+          b.ondrop = async (e) => {
+            e.preventDefault();
+            b.classList.remove("drag-over");
+            if (!draggedId) return;
+            try {
+              showLoading();
+              const q = await getDocs(query(collection(db, "tasks"), where("__name__", "==", draggedId)));
+              if (q.empty) throw new Error("Задача не найдена");
+              const data = q.docs[0].data();
+              if (!data.parts || data.parts.length === 0) { showToast("⚠️ Сначала добавьте детали в задачу (нажмите на шар)!", true); return; }
+              if (!data.comment || !data.comment.trim()) { showToast("⚠️ Нужен комментарий!", true); return; }
+              await updateDoc(doc(db, "tasks", draggedId), { done: true, manager: b.dataset.manager, doneAt: new Date().toISOString() });
+              showToast(`✅ Завершено`);
+              draggedId = null;
+            } catch (e) { showToast("Ошибка: " + e.message, true); } finally { hideLoading(); }
+          };
+        });
+      }
+
+      onSnapshot(collection(db, "tasks"), (snap) => {
+          const ballsContainer = document.getElementById("balls");
+          const containers = { eduard: document.getElementById("eduard"), gennady: document.getElementById("gennady"), vyacheslav: document.getElementById("vyacheslav") };
+          ballsContainer.innerHTML = "";
+          Object.values(containers).forEach(c => { if (c) c.innerHTML = ""; });
+          const grouped = { eduard: {}, gennady: {}, vyacheslav: {} };
+          let active = 0;
+          const done = { eduard: 0, gennady: 0, vyacheslav: 0 };
+          snap.forEach((doc) => {
+            const t = doc.data(), id = doc.id;
+            if (t.done) {
+              if (isToday(t.doneAt)) {
+                const date = formatDate(t.doneAt);
+                const manager = t.manager;
+                if (!grouped[manager][date]) grouped[manager][date] = [];
+                grouped[manager][date].push({ ...t, id });
+                done[manager]++;
+              }
+            } else { active++; }
+          });
+          const ballsFragment = document.createDocumentFragment();
+          snap.forEach((doc) => {
+            const t = doc.data(), id = doc.id;
+            if (!t.done) {
+              const div = document.createElement("div");
+              div.className = `ball ${t.priority || "medium"}`;
+              div.innerHTML = `<div class="time-label">🕐 ${formatTime(t.createdAt)}</div><div class="client-name">${escapeHtml(t.client)}</div><div class="car-brand">🚗 ${escapeHtml(t.car || "—")}</div><div class="ball-task-text">${escapeHtml(t.text.substring(0, 40))}</div><div style="font-size:9px;margin-top:5px;">📌 ${t.manager === "eduard" ? "Эдуард" : t.manager === "gennady" ? "Геннадий" : "Вячеслав"}</div>`;
+              div.draggable = true;
+              div.ondragstart = (e) => { draggedId = id; div.classList.add("dragging"); e.dataTransfer.setData("text/plain", id); };
+              div.ondragend = () => div.classList.remove("dragging");
+              div.onclick = () => {
+                currentId = id;
+                localStorage.setItem("currentTaskId", id);
+                currentClient = t.client;
+                parts = (t.parts || []).map((p, idx) => ({
+                  id: idx + 1,
+                  name: p.name || "Деталь",
+                  originalNumber: p.originalNumber || "",
+                  analogs: p.analogs || []
+                }));
+                nextPartId = parts.length + 1;
+                currentTaskText = t.text;
+                document.getElementById("modalClient").innerText = t.client;
+                document.getElementById("modalCar").innerHTML = `🚗 ${escapeHtml(t.car || "не указана")}`;
+                document.getElementById("modalTaskText").innerHTML = `📋 ${escapeHtml(t.text)}`;
+                document.getElementById("managerComment").value = t.comment || "";
+                renderParts();
+                document.getElementById("editModal").style.display = "flex";
+              };
+              ballsFragment.appendChild(div);
+            }
+          });
+          ballsContainer.appendChild(ballsFragment);
+          for (const [manager, container] of Object.entries(containers)) {
+            const containerFragment = document.createDocumentFragment();
+            const dates = Object.keys(grouped[manager]).sort((a, b) => new Date(b) - new Date(a));
+            dates.forEach((date) => {
+              const header = document.createElement("div");
+              header.className = "date-header";
+              header.innerHTML = `📅 ${date}`;
+              containerFragment.appendChild(header);
+              grouped[manager][date].forEach((task) => {
+                const el = document.createElement("div");
+                el.className = "task";
+                el.innerHTML = `<div class="task-header"><span class="task-time-start">🕐 ${formatTime(task.doneAt)}</span><span class="task-duration">⚡ ${getMinutesDiff(task.createdAt, task.doneAt)} мин</span></div><div class="task-info-row"><span class="task-client"><strong>${escapeHtml(task.client)}</strong></span><span class="task-car">🚗 ${escapeHtml(task.car || "—")}</span><span class="task-text">📋 ${escapeHtml(task.text)}</span></div>${task.comment ? `<div class="task-comment">💬 ${escapeHtml(task.comment)}</div>` : ""}`;
+                el.onclick = () => window.showArchivedDetails(task);
+                containerFragment.appendChild(el);
+              });
+            });
+            if (dates.length === 0) {
+              const empty = document.createElement("div");
+              empty.style.textAlign = "center";
+              empty.style.color = "#666";
+              empty.style.padding = "20px";
+              empty.innerText = "📭 Нет задач за сегодня";
+              containerFragment.appendChild(empty);
+            }
+            container.innerHTML = "";
+            container.appendChild(containerFragment);
+          }
+          document.getElementById("count-eduard").innerText = done.eduard;
+          document.getElementById("count-gennady").innerText = done.gennady;
+          document.getElementById("count-vyacheslav").innerText = done.vyacheslav;
+          document.getElementById("stats").innerHTML = `📊 Активных: ${active} | ✅ Сегодня: ${done.eduard + done.gennady + done.vyacheslav} | 👥 Клиентов: ${allClients.length}`;
+          loadFollowUpTasks();
+        }, (err) => { console.error(err); showToast("Ошибка подключения к БД", true); });
+
+      const managerSelect = document.getElementById("manager");
+      const clearEduardBtn = document.getElementById("clearEduardBtn");
+
+      function updateClearButton() {
+        if (managerSelect.value === "eduard") { clearEduardBtn.style.display = "inline-block"; } else { clearEduardBtn.style.display = "none"; }
+      }
+      updateClearButton();
+      managerSelect.addEventListener("change", updateClearButton);
+
+      clearEduardBtn.onclick = async function() {
+        const confirm1 = confirm("⚠️ Вы уверены, что хотите очистить ВСЕ задачи Эдуарда?");
+        if (!confirm1) return;
+        const confirm2 = confirm("❗ ПОДТВЕРДИТЕ ЕЩЁ РАЗ: Действие необратимо!");
+        if (!confirm2) return;
+        try {
+          showLoading();
+          const snap = await getDocs(query(collection(db, "tasks"), where("manager", "==", "eduard")));
+          const batch = writeBatch(db);
+          let count = 0;
+          snap.forEach((doc) => { batch.delete(doc.ref); count++; });
+          await batch.commit();
+          showToast(`🗑 Удалено ${count} задач Эдуарда`);
+        } catch (e) { showToast("Ошибка: " + e.message, true); } finally { hideLoading(); }
+      };
+
+      document.getElementById("addBtn").onclick = () => window.addTask();
+      document.getElementById("autoDetectBtn").onclick = () => window.autoDetectAndAdd();
+      document.getElementById("extractPartsBtn").onclick = () => window.extractAndAddParts();
+      document.getElementById("exportClientsBtn")?.addEventListener("click", () => window.exportClients());
+
+      const clientAutoInput = document.getElementById("clientInput");
+      let clientSearchTimeout = null;
+      if (clientAutoInput) {
+        clientAutoInput.addEventListener("input", function() {
+          const value = this.value.trim();
+          clearTimeout(clientSearchTimeout);
+          clientSearchTimeout = setTimeout(async () => { if (value.length < 1) return; await findAndFillClientData(value); }, 500);
+        });
+        clientAutoInput.addEventListener("change", async function() { await findAndFillClientData(this.value.trim()); });
+        clientAutoInput.addEventListener("blur", async function() { await findAndFillClientData(this.value.trim()); });
+      }
+
+      setupDropZones();
+      loadClients();
+      loadSuppliers();
+      loadDictionary();
+      setInterval(() => { loadFollowUpTasks(); }, 120000);
+      
+      console.log("✅ CRM v8.2 с исправленным добавлением аналогов и загрузкой деталей");
+    </script>
+  </body>
+</html>
